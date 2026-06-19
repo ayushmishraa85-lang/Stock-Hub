@@ -1,0 +1,40 @@
+ProductID,ProductName,Category,Price,CurrentStock,ReorderLevel,SupplierID,SupplierName,IsActive
+20,Aashirvaad Atta 5kg,Staples,245.0,35,20,2,Daily Needs Wholesale,1
+2,Amul Butter 100g,Dairy,58.0,29,30,1,FreshFarm Distributors,1
+1,Amul Toned Milk 500ml,Dairy,28.0,100,40,1,FreshFarm Distributors,1
+13,Apple 1kg (Shimla),Fruits,140.0,73,25,6,GreenLeaf Produce,1
+12,Banana Dozen,Fruits,50.0,68,30,6,GreenLeaf Produce,1
+28,Bingo Mad Angles 72g,Snacks,20.0,29,30,8,SnackWorld Traders,1
+33,Bisleri Water 1L (pack of 6),Beverages,90.0,46,30,4,QuickStock Logistics,1
+4,Britannia Cheese Slices,Dairy,120.0,73,20,1,FreshFarm Distributors,1
+11,Capsicum 500g,Vegetables,28.0,16,20,6,GreenLeaf Produce,1
+10,Carrot 500g,Vegetables,22.0,65,25,6,GreenLeaf Produce,1
+29,Coca-Cola 750ml,Beverages,40.0,35,35,4,QuickStock Logistics,1
+37,Colgate Toothpaste 150g,Household,89.0,52,25,7,HomeEssentials Ltd.,1
+38,Dettol Soap (pack of 4),Household,150.0,20,20,7,HomeEssentials Ltd.,1
+18,Fortune Sunflower Oil 1L,Staples,145.0,65,30,2,Daily Needs Wholesale,1
+39,Good Knight Mosquito Repellent,Household,75.0,69,15,7,HomeEssentials Ltd.,1
+36,Harpic Toilet Cleaner 500ml,Household,99.0,47,15,7,HomeEssentials Ltd.,1
+19,India Gate Basmati Rice 1kg,Staples,95.0,87,30,2,Daily Needs Wholesale,1
+24,Kurkure Masala Munch 90g,Snacks,20.0,83,50,8,SnackWorld Traders,1
+23,Lay's Classic Salted 52g,Snacks,20.0,109,60,8,SnackWorld Traders,1
+27,Maggi Noodles 70g (pack of 4),Snacks,56.0,76,45,8,SnackWorld Traders,1
+14,Mango 1kg (Alphonso),Fruits,220.0,42,15,6,GreenLeaf Produce,1
+3,Mother Dairy Curd 400g,Dairy,45.0,71,25,1,FreshFarm Distributors,1
+32,Nescafe Classic Coffee 50g,Beverages,180.0,70,20,4,QuickStock Logistics,1
+7,Onion 1kg,Vegetables,35.0,82,50,6,GreenLeaf Produce,1
+25,Oreo Biscuits 120g,Snacks,35.0,38,40,8,SnackWorld Traders,1
+5,Paneer 200g,Dairy,90.0,54,20,6,GreenLeaf Produce,1
+15,Papaya 1pc,Fruits,35.0,61,15,6,GreenLeaf Produce,1
+26,Parle-G Biscuits 200g,Snacks,25.0,105,50,8,SnackWorld Traders,1
+16,Pomegranate 500g,Fruits,80.0,62,15,6,GreenLeaf Produce,1
+8,Potato 1kg,Vegetables,25.0,50,50,6,GreenLeaf Produce,1
+30,Real Mixed Fruit Juice 1L,Beverages,110.0,77,20,4,QuickStock Logistics,1
+9,Spinach Bunch,Vegetables,20.0,67,25,6,GreenLeaf Produce,1
+22,Sugar 1kg,Staples,45.0,53,35,2,Daily Needs Wholesale,1
+34,Surf Excel Detergent 1kg,Household,135.0,49,20,7,HomeEssentials Ltd.,1
+17,Tata Salt 1kg,Staples,25.0,87,40,2,Daily Needs Wholesale,1
+31,Tata Tea Premium 250g,Beverages,130.0,52,25,4,QuickStock Logistics,1
+6,Tomato 1kg,Vegetables,30.0,97,50,6,GreenLeaf Produce,1
+21,Toor Dal 1kg,Staples,130.0,55,20,2,Daily Needs Wholesale,1
+35,Vim Dishwash Liquid 500ml,Household,95.0,36,20,7,HomeEssentials Ltd.,1
