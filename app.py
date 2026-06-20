@@ -1,822 +1,952 @@
-"""
-app.py
-------
-Main Streamlit application: login gate, theming, navigation, and all pages
-of the Inventory Management System dashboard.
+import React, { useState, useEffect, useRef } from "react";
+import {
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+import {
+  LayoutGrid, Package, ShoppingCart, Truck, BarChart3, TrendingUp,
+  Settings, Search, Bell, Moon, Sun, ChevronDown, ArrowUpRight, ArrowDownRight,
+  Sparkles, X, Send, ChevronRight,
+  MoreHorizontal, ArrowRight,
+} from "lucide-react";
 
-Run with:  streamlit run app.py
-"""
+/* ----------------------------------------------------------------------- */
+/* DESIGN TOKENS — exact palette from brief                                */
+/* ----------------------------------------------------------------------- */
 
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime
+const C = {
+  bg: "#0F1117",
+  sidebar: "#171923",
+  card: "#1E2230",
+  primary: "#7C3AED",
+  accent: "#A855F7",
+  success: "#22C55E",
+  warning: "#F59E0B",
+  danger: "#EF4444",
+  text: "#F8FAFC",
+  textSecondary: "#94A3B8",
+  border: "rgba(255,255,255,0.08)",
+};
 
-import database
-import inventory
-import sales
-import analytics
-import utils
-import seed_data
+/* ----------------------------------------------------------------------- */
+/* SAMPLE DATA                                                              */
+/* ----------------------------------------------------------------------- */
 
+const salesTrend = [
+  { day: "Mon", revenue: 82000, orders: 412 },
+  { day: "Tue", revenue: 91000, orders: 448 },
+  { day: "Wed", revenue: 78000, orders: 390 },
+  { day: "Thu", revenue: 104000, orders: 501 },
+  { day: "Fri", revenue: 118000, orders: 562 },
+  { day: "Sat", revenue: 142000, orders: 640 },
+  { day: "Sun", revenue: 129000, orders: 598 },
+];
 
-# ---------------------------------------------------------------------------
-# PAGE CONFIG + THEME
-# ---------------------------------------------------------------------------
+const categoryData = [
+  { name: "Dairy", value: 28, color: "#7C3AED" },
+  { name: "Snacks", value: 22, color: "#A855F7" },
+  { name: "Beverages", value: 18, color: "#C084FC" },
+  { name: "Staples", value: 16, color: "#E9D5FF" },
+  { name: "Household", value: 16, color: "#4C1D95" },
+];
 
-st.set_page_config(
-    page_title="StockHub — Inventory Management",
-    page_icon="📦",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+const topProducts = [
+  { name: "Amul Milk 500ml", units: 4280 },
+  { name: "Lay's Classic 52g", units: 3940 },
+  { name: "Tata Salt 1kg", units: 3510 },
+  { name: "Maggi Noodles", units: 3120 },
+  { name: "Coca-Cola 750ml", units: 2870 },
+];
 
-database.init_db()
+const inventoryItems = [
+  { name: "Amul Toned Milk 500ml", category: "Dairy", stock: 412, reorder: 100, supplier: "FreshFarm Distributors", status: "in-stock", price: 28 },
+  { name: "Lay's Classic Salted 52g", category: "Snacks", stock: 38, reorder: 80, supplier: "SnackWorld Traders", status: "low-stock", price: 20 },
+  { name: "Tata Salt 1kg", category: "Staples", stock: 0, reorder: 40, supplier: "Daily Needs Wholesale", status: "out-of-stock", price: 25 },
+  { name: "Mother Dairy Curd 400g", category: "Dairy", stock: 286, reorder: 60, supplier: "FreshFarm Distributors", status: "in-stock", price: 45 },
+  { name: "Maggi Noodles (4-pack)", category: "Snacks", stock: 52, reorder: 90, supplier: "SnackWorld Traders", status: "low-stock", price: 56 },
+  { name: "Surf Excel 1kg", category: "Household", stock: 198, reorder: 40, supplier: "HomeEssentials Ltd.", status: "in-stock", price: 135 },
+];
 
+const transactions = [
+  { product: "Amul Toned Milk 500ml", category: "Dairy", qty: 24, revenue: 672, status: "completed" },
+  { product: "Lay's Classic Salted 52g", category: "Snacks", qty: 60, revenue: 1200, status: "completed" },
+  { product: "Tata Salt 1kg", category: "Staples", qty: 12, revenue: 300, status: "pending" },
+  { product: "Maggi Noodles (4-pack)", category: "Snacks", qty: 8, revenue: 448, status: "completed" },
+  { product: "Coca-Cola 750ml", category: "Beverages", qty: 30, revenue: 1200, status: "failed" },
+];
 
-def ensure_demo_data():
-    """Populate demo data on fresh deploys where inventory.db does not exist."""
-    with database.get_connection() as conn:
-        product_count = conn.execute("SELECT COUNT(*) AS c FROM Products").fetchone()["c"]
-    if product_count == 0:
-        seed_data.seed_all(verbose=False)
+const heatmapCategories = ["Dairy", "Snacks", "Beverages", "Staples", "Household"];
+const heatmapDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const heatmapData = heatmapCategories.map(() =>
+  heatmapDays.map(() => Math.floor(Math.random() * 80) + 15)
+);
 
+/* ----------------------------------------------------------------------- */
+/* PRIMITIVES                                                              */
+/* ----------------------------------------------------------------------- */
 
-ensure_demo_data()
+function StatusBadge({ status }) {
+  const config = {
+    "in-stock": { label: "In stock", color: C.success, bg: "rgba(34,197,94,0.12)" },
+    "low-stock": { label: "Low stock", color: C.warning, bg: "rgba(245,158,11,0.12)" },
+    "out-of-stock": { label: "Out of stock", color: C.danger, bg: "rgba(239,68,68,0.12)" },
+    completed: { label: "Completed", color: C.success, bg: "rgba(34,197,94,0.12)" },
+    pending: { label: "Pending", color: C.warning, bg: "rgba(245,158,11,0.12)" },
+    failed: { label: "Failed", color: C.danger, bg: "rgba(239,68,68,0.12)" },
+  }[status];
 
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+      style={{ color: config.color, backgroundColor: config.bg }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: config.color }} />
+      {config.label}
+    </span>
+  );
+}
 
-def load_theme(dark_mode: bool):
-    """Injects custom CSS for the Zepto-inspired visual identity.
-    Palette: deep violet primary, electric lime accent, soft red danger.
-    """
-    if dark_mode:
-        bg = "#121113"
-        surface = "#1C1B1F"
-        surface2 = "#242329"
-        text = "#F4F2F7"
-        text_secondary = "#A8A3AE"
-        border = "#33313A"
-    else:
-        bg = "#FAFAF9"
-        surface = "#FFFFFF"
-        surface2 = "#F3F0FA"
-        text = "#18181B"
-        text_secondary = "#71717A"
-        border = "#E8E6EE"
+function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }) {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef(null);
+  const started = useRef(false);
 
-    primary = "#5B21B6"
-    primary_light = "#7C3AED"
-    accent = "#A3E635"
-    danger = "#DC2626"
-    warning = "#F59E0B"
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !started.current) {
+          started.current = true;
+          const duration = 900;
+          const start = performance.now();
+          const step = (now) => {
+            const progress = Math.min((now - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setDisplay(value * eased);
+            if (progress < 1) requestAnimationFrame(step);
+          };
+          requestAnimationFrame(step);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, [value]);
 
-    st.markdown(f"""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+  return (
+    <span ref={ref}>
+      {prefix}
+      {display.toLocaleString("en-IN", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })}
+      {suffix}
+    </span>
+  );
+}
 
-        html, body, [class*="css"] {{
-            font-family: 'Inter', sans-serif;
+function KpiCard({ label, value, prefix, suffix, decimals, trend, trendUp, accentColor, big = false }) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="relative overflow-hidden rounded-2xl transition-all duration-300 cursor-default"
+      style={{
+        backgroundColor: C.card,
+        border: `1px solid ${C.border}`,
+        padding: big ? "22px 22px 20px" : "18px 20px",
+        boxShadow: hover ? "0 16px 32px -14px rgba(0,0,0,0.5)" : "0 2px 10px -4px rgba(0,0,0,0.25)",
+        transform: hover ? "translateY(-2px)" : "translateY(0)",
+      }}
+    >
+      <div
+        className="absolute -right-6 -top-6 w-28 h-28 rounded-full transition-opacity duration-500 pointer-events-none"
+        style={{
+          opacity: hover ? 0.5 : 0.22,
+          background: `radial-gradient(circle, ${accentColor}, transparent 70%)`,
+          filter: "blur(18px)",
         }}
+      />
+      <p
+        className="relative text-[13px] mb-2"
+        style={{ color: C.textSecondary, letterSpacing: "0.01em" }}
+      >
+        {label}
+      </p>
+      <div className="relative flex items-end justify-between gap-3">
+        <p
+          className={big ? "text-[34px] font-semibold tracking-tight leading-none" : "text-[26px] font-semibold tracking-tight leading-none"}
+          style={{ color: C.text }}
+        >
+          <AnimatedNumber value={value} prefix={prefix} suffix={suffix} decimals={decimals} />
+        </p>
+        <span
+          className="flex items-center gap-0.5 text-xs font-medium pb-1"
+          style={{ color: trendUp ? C.success : C.danger }}
+        >
+          {trendUp ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+          {trend}
+        </span>
+      </div>
+    </div>
+  );
+}
 
-        .stApp {{
-            background-color: {bg};
-            color: {text};
-        }}
+function RevenueHeroCard() {
+  const max = Math.max(...salesTrend.map((d) => d.revenue));
+  const min = Math.min(...salesTrend.map((d) => d.revenue));
+  const pts = salesTrend.map((d, i) => {
+    const x = (i / (salesTrend.length - 1)) * 100;
+    const y = 36 - ((d.revenue - min) / (max - min || 1)) * 32;
+    return `${x},${y}`;
+  });
+  const path = "M" + pts.join(" L");
+  const areaPath = `${path} L100,36 L0,36 Z`;
 
-        h1, h2, h3, .kpi-value {{
-            font-family: 'Sora', sans-serif;
-        }}
-
-        /* Hide default Streamlit chrome for a cleaner app feel */
-        #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
-
-        /* --- Top brand bar --- */
-        .brand-bar {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 4px 0 18px 0;
-        }}
-        .brand-mark {{
-            background: linear-gradient(135deg, {primary}, {primary_light});
-            color: white;
-            font-family: 'Sora', sans-serif;
-            font-weight: 800;
-            font-size: 20px;
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }}
-        .brand-title {{
-            font-family: 'Sora', sans-serif;
-            font-weight: 700;
-            font-size: 22px;
-            color: {text};
-            letter-spacing: -0.3px;
-        }}
-        .brand-sub {{
-            font-size: 12px;
-            color: {text_secondary};
-            margin-top: -4px;
-        }}
-
-        /* --- KPI cards: warehouse-bin styled --- */
-        .kpi-card {{
-            background: {surface};
-            border: 1px solid {border};
-            border-left: 4px solid {primary};
-            border-radius: 10px;
-            padding: 16px 18px;
-            height: 100%;
-        }}
-        .kpi-card.accent {{ border-left-color: {accent}; }}
-        .kpi-card.danger {{ border-left-color: {danger}; }}
-        .kpi-card.warning {{ border-left-color: {warning}; }}
-
-        .kpi-eyebrow {{
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.6px;
-            text-transform: uppercase;
-            color: {text_secondary};
-            margin-bottom: 6px;
-        }}
-        .kpi-value {{
-            font-size: 26px;
-            font-weight: 700;
-            color: {text};
-            line-height: 1.1;
-        }}
-        .kpi-delta {{
-            font-size: 12px;
-            color: {text_secondary};
-            margin-top: 4px;
-        }}
-
-        /* --- Section headers --- */
-        .section-title {{
-            font-family: 'Sora', sans-serif;
-            font-weight: 700;
-            font-size: 18px;
-            color: {text};
-            margin: 6px 0 12px 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }}
-
-        /* --- Alert pills --- */
-        .alert-pill {{
-            background: {surface2};
-            border-radius: 8px;
-            padding: 10px 14px;
-            margin-bottom: 8px;
-            font-size: 14px;
-            color: {text};
-            border-left: 3px solid {danger};
-        }}
-
-        /* Chat bubbles */
-        .chat-user {{
-            background: {primary};
-            color: white;
-            padding: 10px 14px;
-            border-radius: 12px 12px 2px 12px;
-            margin: 6px 0;
-            max-width: 80%;
-            margin-left: auto;
-            font-size: 14px;
-        }}
-        .chat-bot {{
-            background: {surface2};
-            color: {text};
-            padding: 10px 14px;
-            border-radius: 12px 12px 12px 2px;
-            margin: 6px 0;
-            max-width: 85%;
-            font-size: 14px;
-        }}
-
-        div[data-testid="stMetricValue"] {{
-            font-family: 'Sora', sans-serif;
-        }}
-
-        .stButton button {{
-            border-radius: 8px;
-            font-weight: 600;
-        }}
-        .stButton button[kind="primary"] {{
-            background-color: {primary};
-            border-color: {primary};
-        }}
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Return palette so chart functions can stay theme-consistent.
-    return {
-        "primary": primary, "primary_light": primary_light, "accent": accent,
-        "danger": danger, "warning": warning, "text": text,
-        "text_secondary": text_secondary, "surface": surface, "bg": bg,
-    }
-
-
-# ---------------------------------------------------------------------------
-# SESSION STATE INIT
-# ---------------------------------------------------------------------------
-
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = None
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = False
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-PALETTE = load_theme(st.session_state.dark_mode)
-
-
-# ---------------------------------------------------------------------------
-# LOGIN PAGE
-# ---------------------------------------------------------------------------
-
-def render_login():
-    col1, col2, col3 = st.columns([1, 1.2, 1])
-    with col2:
-        st.markdown(f"""
-            <div style="text-align:center; margin-top: 60px; margin-bottom: 20px;">
-                <div style="background: linear-gradient(135deg, {PALETTE['primary']}, {PALETTE['primary_light']});
-                            width: 64px; height: 64px; border-radius: 16px; display: inline-flex;
-                            align-items: center; justify-content: center; font-size: 28px;">📦</div>
-                <h1 style="font-family:'Sora',sans-serif; margin-top: 14px; margin-bottom:0;">StockHub</h1>
-                <p style="color:{PALETTE['text_secondary']}; margin-top:4px;">Inventory Management System</p>
-            </div>
-        """, unsafe_allow_html=True)
-
-        with st.form("login_form"):
-            username = st.text_input("Username", placeholder="admin")
-            password = st.text_input("Password", type="password", placeholder="••••••••")
-            submitted = st.form_submit_button("Log in", use_container_width=True, type="primary")
-
-            if submitted:
-                user = database.verify_user(username.strip(), password)
-                if user:
-                    st.session_state.logged_in = True
-                    st.session_state.username = user["Username"]
-                    st.session_state.role = user["Role"]
-                    st.rerun()
-                else:
-                    st.error("Invalid username or password.")
-
-        st.caption("Demo credentials — **admin** / **admin123**")
-
-
-# ---------------------------------------------------------------------------
-# REUSABLE UI HELPERS
-# ---------------------------------------------------------------------------
-
-def kpi_card(col, eyebrow, value, variant="default", delta=None):
-    css_class = "kpi-card" if variant == "default" else f"kpi-card {variant}"
-    delta_html = f'<div class="kpi-delta">{delta}</div>' if delta else ""
-    col.markdown(f"""
-        <div class="{css_class}">
-            <div class="kpi-eyebrow">{eyebrow}</div>
-            <div class="kpi-value">{value}</div>
-            {delta_html}
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl flex flex-col justify-between"
+      style={{
+        background: `linear-gradient(155deg, #1E2230 0%, #221B36 100%)`,
+        border: `1px solid rgba(168,85,247,0.18)`,
+        padding: "22px 24px 18px",
+      }}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[13px] mb-2" style={{ color: C.textSecondary }}>Revenue this week</p>
+          <p className="text-[34px] font-semibold tracking-tight leading-none" style={{ color: C.text }}>
+            <AnimatedNumber value={1.24} prefix="₹" suffix="M" decimals={2} />
+          </p>
         </div>
-    """, unsafe_allow_html=True)
-
-
-def section_title(emoji, text):
-    st.markdown(f'<div class="section-title">{emoji} {text}</div>', unsafe_allow_html=True)
-
-
-CHART_COLORWAY = [PALETTE["primary"], PALETTE["accent"], PALETTE["warning"],
-                  "#0EA5E9", "#EC4899", "#14B8A6", PALETTE["danger"], "#F97316"]
-
-
-def style_fig(fig):
-    fig.update_layout(
-        plot_bgcolor=PALETTE["surface"],
-        paper_bgcolor=PALETTE["surface"],
-        font_color=PALETTE["text"],
-        font_family="Inter",
-        colorway=CHART_COLORWAY,
-        margin=dict(l=10, r=10, t=40, b=10),
-        legend=dict(bgcolor="rgba(0,0,0,0)"),
-    )
-    return fig
-
-
-# ---------------------------------------------------------------------------
-# PAGE: DASHBOARD
-# ---------------------------------------------------------------------------
-
-def page_dashboard():
-    section_title("📊", "Overview")
-    kpis = analytics.get_kpi_summary()
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    kpi_card(c1, "Total Products", utils.format_number(kpis["total_products"]))
-    kpi_card(c2, "Inventory Value", utils.format_currency(kpis["inventory_value"]), variant="accent")
-    kpi_card(c3, "Total Revenue", utils.format_currency(kpis["total_revenue"]))
-    kpi_card(c4, "Units Sold", utils.format_number(kpis["total_units_sold"]))
-    kpi_card(c5, "Low Stock Items", utils.format_number(kpis["low_stock_count"]),
-              variant="danger" if kpis["low_stock_count"] > 0 else "default")
-
-    st.write("")
-    left, right = st.columns([1.4, 1])
-
-    with left:
-        section_title("📈", "Daily Sales Trend (Last 60 Days)")
-        trend = analytics.get_daily_sales_trend(60)
-        if trend.empty:
-            st.info("No sales data yet.")
-        else:
-            fig = px.area(trend, x="Date", y="Revenue", markers=False)
-            fig.update_traces(line_color=PALETTE["primary"], fillcolor="rgba(91,33,182,0.15)")
-            st.plotly_chart(style_fig(fig), use_container_width=True)
-
-    with right:
-        section_title("🏷️", "Revenue by Category")
-        cat = analytics.get_category_revenue()
-        if cat.empty:
-            st.info("No sales data yet.")
-        else:
-            fig = px.pie(cat, names="Category", values="Revenue", hole=0.55)
-            fig.update_traces(textinfo="percent+label")
-            st.plotly_chart(style_fig(fig), use_container_width=True)
-
-    st.write("")
-    left2, right2 = st.columns(2)
-
-    with left2:
-        section_title("🏆", "Top Selling Products")
-        top = analytics.get_top_selling_products(8)
-        if top.empty:
-            st.info("No sales data yet.")
-        else:
-            fig = px.bar(top, x="QuantitySold", y="ProductName", orientation="h",
-                          color="Category", text="QuantitySold")
-            fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
-            st.plotly_chart(style_fig(fig), use_container_width=True)
-
-    with right2:
-        section_title("🚨", "Low Stock Alerts")
-        low = inventory.get_low_stock_products()
-        if low.empty:
-            st.success("All products are sufficiently stocked. ✅")
-        else:
-            for _, row in low.head(8).iterrows():
-                pct = row["CurrentStock"] / max(row["ReorderLevel"], 1)
-                st.markdown(f"""
-                    <div class="alert-pill">
-                        <b>{row['ProductName']}</b> — {row['CurrentStock']} left
-                        <span style="color:{PALETTE['text_secondary']};">
-                        (reorder level: {row['ReorderLevel']})</span>
-                    </div>
-                """, unsafe_allow_html=True)
-
-
-# ---------------------------------------------------------------------------
-# PAGE: INVENTORY MANAGEMENT
-# ---------------------------------------------------------------------------
-
-def page_inventory():
-    section_title("📦", "Inventory Management")
-
-    tab1, tab2, tab3 = st.tabs(["Browse & Search", "Add Product", "Manage Stock"])
-
-    with tab1:
-        col1, col2, col3 = st.columns([2, 1, 1])
-        keyword = col1.text_input("🔍 Search by product name", "")
-        categories = ["All"] + inventory.get_categories()
-        category = col2.selectbox("Category", categories)
-        col3.write("")
-        col3.write("")
-        show_inactive = col3.checkbox("Show discontinued")
-
-        df = inventory.search_products(keyword, category)
-        if show_inactive:
-            df_all = inventory.get_all_products(include_inactive=True)
-            if keyword:
-                df_all = df_all[df_all["ProductName"].str.contains(keyword, case=False, na=False)]
-            if category != "All":
-                df_all = df_all[df_all["Category"] == category]
-            df = df_all
-
-        st.dataframe(
-            df[["ProductID", "ProductName", "Category", "Price", "CurrentStock",
-                "ReorderLevel", "SupplierName"]],
-            use_container_width=True, hide_index=True,
-        )
-
-        exp1, exp2 = st.columns(2)
-        exp1.download_button("⬇️ Export CSV", utils.dataframe_to_csv_bytes(df),
-                              "products.csv", "text/csv", use_container_width=True)
-        exp2.download_button("⬇️ Export Excel", utils.dataframe_to_excel_bytes(df, "Products"),
-                              "products.xlsx",
-                              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                              use_container_width=True)
-
-        st.write("")
-        st.markdown("**Delete a product**")
-        del_col1, del_col2 = st.columns([3, 1])
-        if not df.empty:
-            options = {f"{r['ProductName']} (ID {r['ProductID']})": r["ProductID"] for _, r in df.iterrows()}
-            choice = del_col1.selectbox("Select product to remove", list(options.keys()), label_visibility="collapsed")
-            if del_col2.button("🗑️ Delete", use_container_width=True):
-                inventory.delete_product(options[choice])
-                st.success(f"Removed '{choice}'. (Soft-deleted — sales history preserved.)")
-                st.rerun()
-
-    with tab2:
-        st.markdown("Add a new product to the catalog.")
-        suppliers_df = inventory.get_all_suppliers()
-        supplier_options = {"— None —": None}
-        supplier_options.update({r["SupplierName"]: r["SupplierID"] for _, r in suppliers_df.iterrows()})
-
-        with st.form("add_product_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("Product Name *")
-            cat = c2.text_input("Category *", placeholder="e.g. Snacks, Dairy, Beverages")
-            c3, c4, c5 = st.columns(3)
-            price = c3.number_input("Price (₹) *", min_value=0.0, step=1.0)
-            stock = c4.number_input("Starting Stock", min_value=0, step=1, value=0)
-            reorder = c5.number_input("Reorder Level", min_value=0, step=1, value=10)
-            supplier_name = st.selectbox("Supplier", list(supplier_options.keys()))
-
-            submitted = st.form_submit_button("➕ Add Product", type="primary")
-            if submitted:
-                try:
-                    inventory.add_product(name, cat, price, int(stock), int(reorder),
-                                           supplier_options[supplier_name])
-                    st.success(f"Added '{name}' to inventory.")
-                    st.rerun()
-                except ValueError as e:
-                    st.error(str(e))
-
-        with st.expander("➕ Add a new supplier instead"):
-            with st.form("add_supplier_form", clear_on_submit=True):
-                sname = st.text_input("Supplier Name *")
-                sphone = st.text_input("Contact Number")
-                semail = st.text_input("Email")
-                if st.form_submit_button("Add Supplier"):
-                    try:
-                        inventory.add_supplier(sname, sphone, semail)
-                        st.success(f"Added supplier '{sname}'.")
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(str(e))
-
-    with tab3:
-        st.markdown("Adjust stock levels or edit product details.")
-        products_df = inventory.get_all_products()
-        if products_df.empty:
-            st.info("No products yet — add one in the 'Add Product' tab.")
-        else:
-            options = {f"{r['ProductName']} (Stock: {r['CurrentStock']})": r["ProductID"]
-                       for _, r in products_df.iterrows()}
-            choice = st.selectbox("Select Product", list(options.keys()))
-            pid = options[choice]
-            product = inventory.get_product_by_id(pid)
-
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.metric("Current Stock", product["CurrentStock"])
-                delta = st.number_input("Adjust stock by (+ / -)", value=0, step=1, key="stock_delta")
-                if st.button("Apply Stock Adjustment", type="primary"):
-                    try:
-                        new_stock = inventory.adjust_stock(pid, int(delta))
-                        st.success(f"Stock updated to {new_stock}.")
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(str(e))
-            with c2:
-                new_price = st.number_input("Price (₹)", value=float(product["Price"]), step=1.0, key="edit_price")
-                if st.button("Update Price"):
-                    inventory.update_product(pid, Price=new_price)
-                    st.success("Price updated.")
-                    st.rerun()
-            with c3:
-                new_reorder = st.number_input("Reorder Level", value=int(product["ReorderLevel"]), step=1, key="edit_reorder")
-                if st.button("Update Reorder Level"):
-                    inventory.update_product(pid, ReorderLevel=int(new_reorder))
-                    st.success("Reorder level updated.")
-                    st.rerun()
-
-
-# ---------------------------------------------------------------------------
-# PAGE: SALES MANAGEMENT
-# ---------------------------------------------------------------------------
-
-def page_sales():
-    section_title("🧾", "Sales Management")
-
-    tab1, tab2 = st.tabs(["Record Sale", "Sales History"])
-
-    with tab1:
-        products_df = inventory.get_all_products()
-        if products_df.empty:
-            st.info("No products available. Add products first.")
-        else:
-            options = {f"{r['ProductName']} — ₹{r['Price']} (Stock: {r['CurrentStock']})": r["ProductID"]
-                       for _, r in products_df.iterrows()}
-            with st.form("record_sale_form", clear_on_submit=True):
-                choice = st.selectbox("Product", list(options.keys()))
-                qty = st.number_input("Quantity Sold", min_value=1, step=1, value=1)
-                sale_date = st.date_input("Sale Date", value=datetime.now())
-                submitted = st.form_submit_button("✅ Record Sale", type="primary")
-
-                if submitted:
-                    pid = options[choice]
-                    try:
-                        sale_id = sales.record_sale(pid, int(qty), sale_date.strftime("%Y-%m-%d"))
-                        st.success(f"Sale #{sale_id} recorded. Stock automatically reduced.")
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(str(e))
-
-    with tab2:
-        history = sales.get_sales_history(limit=300)
-        if history.empty:
-            st.info("No sales recorded yet.")
-        else:
-            c1, c2 = st.columns([1, 3])
-            cat_filter = c1.selectbox("Filter by category", ["All"] + sorted(history["Category"].unique().tolist()))
-            display_df = history if cat_filter == "All" else history[history["Category"] == cat_filter]
-
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-            exp1, exp2 = st.columns(2)
-            exp1.download_button("⬇️ Export CSV", utils.dataframe_to_csv_bytes(display_df),
-                                  "sales_history.csv", "text/csv", use_container_width=True)
-            exp2.download_button("⬇️ Export Excel", utils.dataframe_to_excel_bytes(display_df, "Sales"),
-                                  "sales_history.xlsx",
-                                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                  use_container_width=True)
-
-            st.write("")
-            st.markdown("**Undo a sale** (restocks the item)")
-            d1, d2 = st.columns([3, 1])
-            sale_options = {f"#{r['SaleID']} — {r['ProductName']} x{r['QuantitySold']} ({r['SaleDate']})": r["SaleID"]
-                             for _, r in display_df.head(50).iterrows()}
-            sale_choice = d1.selectbox("Select sale", list(sale_options.keys()), label_visibility="collapsed")
-            if d2.button("↩️ Undo Sale", use_container_width=True):
-                sales.delete_sale(sale_options[sale_choice], restock=True)
-                st.success("Sale removed and stock restored.")
-                st.rerun()
-
-
-# ---------------------------------------------------------------------------
-# PAGE: ANALYTICS / BUSINESS QUESTIONS
-# ---------------------------------------------------------------------------
-
-def page_analytics():
-    section_title("🔍", "Business Insights")
-
-    q = st.selectbox("Choose a business question", [
-        "1. Which products sell the fastest?",
-        "2. Which products need reordering?",
-        "3. Which categories generate the highest revenue?",
-        "4. Which products have not sold in the last 30 days?",
-        "5. What is the current inventory value?",
-        "6. Which supplier provides the most products?",
-    ])
-
-    st.write("")
-
-    if q.startswith("1"):
-        velocity = analytics.get_sales_velocity()
-        if velocity.empty:
-            st.info("Not enough recent sales data.")
-        else:
-            fig = px.bar(velocity.head(10), x="AvgUnitsPerDay", y="ProductName",
-                          orientation="h", color="Category", text="AvgUnitsPerDay")
-            fig.update_layout(yaxis=dict(autorange="reversed"))
-            st.plotly_chart(style_fig(fig), use_container_width=True)
-            st.caption("Average units sold per day over the last 30 days — the clearest read on sell-through speed.")
-            st.dataframe(velocity, use_container_width=True, hide_index=True)
-
-    elif q.startswith("2"):
-        reorder_df = analytics.get_reorder_list()
-        if reorder_df.empty:
-            st.success("No products currently need reordering. ✅")
-        else:
-            st.dataframe(reorder_df, use_container_width=True, hide_index=True)
-            st.download_button("⬇️ Export Reorder List (CSV)",
-                                utils.dataframe_to_csv_bytes(reorder_df),
-                                "reorder_list.csv", "text/csv")
-
-    elif q.startswith("3"):
-        cat = analytics.get_category_revenue()
-        if cat.empty:
-            st.info("No sales data yet.")
-        else:
-            fig = px.bar(cat, x="Category", y="Revenue", color="Category", text="Revenue")
-            st.plotly_chart(style_fig(fig), use_container_width=True)
-            st.dataframe(cat, use_container_width=True, hide_index=True)
-
-    elif q.startswith("4"):
-        stale = analytics.get_stale_products(30)
-        if stale.empty:
-            st.success("Every product has sold within the last 30 days. ✅")
-        else:
-            st.dataframe(stale, use_container_width=True, hide_index=True)
-            st.caption(f"{len(stale)} product(s) flagged as dead stock — consider a promotion or discontinuation.")
-
-    elif q.startswith("5"):
-        value = inventory.get_inventory_value()
-        st.markdown(f"### Total Inventory Value: {utils.format_currency(value)}")
-        by_cat = analytics.get_inventory_value_by_category()
-        if not by_cat.empty:
-            fig = px.pie(by_cat, names="Category", values="InventoryValue", hole=0.5)
-            st.plotly_chart(style_fig(fig), use_container_width=True)
-            st.dataframe(by_cat, use_container_width=True, hide_index=True)
-
-    elif q.startswith("6"):
-        sup = analytics.get_supplier_product_counts()
-        fig = px.bar(sup, x="SupplierName", y="ProductCount", color="SupplierName")
-        fig.update_layout(showlegend=False, xaxis_tickangle=-30)
-        st.plotly_chart(style_fig(fig), use_container_width=True)
-        st.dataframe(sup, use_container_width=True, hide_index=True)
-
-
-# ---------------------------------------------------------------------------
-# PAGE: AI FEATURES
-# ---------------------------------------------------------------------------
-
-def page_ai():
-    section_title("🤖", "AI-Powered Features")
-
-    tab1, tab2, tab3 = st.tabs(["Demand Forecast", "Reorder Recommendations", "Stockout Predictions"])
-
-    with tab1:
-        products_df = inventory.get_all_products()
-        options = {r["ProductName"]: r["ProductID"] for _, r in products_df.iterrows()}
-        c1, c2 = st.columns([2, 1])
-        choice = c1.selectbox("Select a product", list(options.keys()))
-        days_ahead = c2.slider("Forecast horizon (days)", 3, 30, 7)
-
-        pid = options[choice]
-        forecast = analytics.forecast_demand(pid, days_ahead)
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Forecasted Demand", f"{forecast['forecast_units']} units")
-        m2.metric("Avg Daily Rate", f"{forecast['avg_daily_rate']} units/day")
-        m3.metric("Confidence", forecast["confidence"].title())
-
-        st.caption("Forecast uses a linear regression trend fitted on the product's daily sales history "
-                    "(scikit-learn `LinearRegression`). More history → higher confidence.")
-
-        # Show historical + projected trend visually
-        prod_sales = sales.get_all_sales_raw()
-        prod_sales = prod_sales[prod_sales["ProductID"] == pid]
-        if not prod_sales.empty:
-            daily = prod_sales.groupby(prod_sales["SaleDate"].dt.date)["QuantitySold"].sum().reset_index()
-            daily.columns = ["Date", "QuantitySold"]
-            fig = px.line(daily, x="Date", y="QuantitySold", markers=True)
-            fig.update_traces(line_color=PALETTE["primary"])
-            st.plotly_chart(style_fig(fig), use_container_width=True)
-
-    with tab2:
-        st.markdown("AI-generated reorder suggestions based on forecasted demand vs. current stock.")
-        days_ahead2 = st.slider("Planning horizon (days)", 3, 30, 7, key="reorder_horizon")
-        recs = analytics.get_reorder_recommendations(days_ahead2)
-        if recs.empty:
-            st.info("No products in inventory yet.")
-        else:
-            def highlight_runout(val):
-                return "background-color: rgba(220,38,38,0.15)" if val else ""
-            st.dataframe(
-                recs.style.map(highlight_runout, subset=["WillRunOut"]),
-                use_container_width=True, hide_index=True,
-            )
-            st.download_button("⬇️ Export Recommendations (Excel)",
-                                utils.dataframe_to_excel_bytes(recs, "Reorder Recs"),
-                                "reorder_recommendations.xlsx",
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-    with tab3:
-        st.markdown("Products predicted to run out of stock **within the next 7 days**, based on demand forecasting.")
-        risky = analytics.predict_stockouts_next_week()
-        if risky.empty:
-            st.success("No products are predicted to run out within 7 days. ✅")
-        else:
-            for _, row in risky.iterrows():
-                st.markdown(f"""
-                    <div class="alert-pill">
-                        🔥 <b>{row['ProductName']}</b> — projected stock in 7 days:
-                        <b>{row['ProjectedStockAfter']}</b> units
-                        (currently {row['CurrentStock']}, forecast demand {row['ForecastDemand_NextNDays']})
-                    </div>
-                """, unsafe_allow_html=True)
-
-
-# ---------------------------------------------------------------------------
-# PAGE: AI CHAT ASSISTANT
-# ---------------------------------------------------------------------------
-
-def page_chat():
-    section_title("💬", "AI Chat Assistant")
-    st.caption("Ask natural-language questions about your inventory and sales.")
-
-    suggestions = [
-        "Which products are low in stock?",
-        "What are the top-selling products?",
-        "How much inventory value do we currently have?",
-        "Which products should be reordered?",
-    ]
-    cols = st.columns(len(suggestions))
-    for col, s in zip(cols, suggestions):
-        if col.button(s, use_container_width=True):
-            st.session_state.chat_history.append(("user", s))
-            st.session_state.chat_history.append(("bot", utils.answer_chat_query(s)))
-
-    for role, msg in st.session_state.chat_history:
-        css_class = "chat-user" if role == "user" else "chat-bot"
-        st.markdown(f'<div class="{css_class}">{msg}</div>', unsafe_allow_html=True)
-
-    user_input = st.chat_input("Type your question...")
-    if user_input:
-        st.session_state.chat_history.append(("user", user_input))
-        answer = utils.answer_chat_query(user_input)
-        st.session_state.chat_history.append(("bot", answer))
-        st.rerun()
-
-
-# ---------------------------------------------------------------------------
-# SIDEBAR + ROUTING
-# ---------------------------------------------------------------------------
-
-def render_sidebar():
-    with st.sidebar:
-        st.markdown(f"""
-            <div class="brand-bar">
-                <div class="brand-mark">S</div>
-                <div>
-                    <div class="brand-title">StockHub</div>
-                    <div class="brand-sub">Inventory Management</div>
-                </div>
+        <span
+          className="flex items-center gap-0.5 text-xs font-medium mt-1"
+          style={{ color: C.success }}
+        >
+          <ArrowUpRight size={13} />
+          11.3% vs last week
+        </span>
+      </div>
+
+      <svg viewBox="0 0 100 36" preserveAspectRatio="none" className="w-full h-12 mt-3" style={{ overflow: "visible" }}>
+        <defs>
+          <linearGradient id="heroFade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={C.accent} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={C.accent} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill="url(#heroFade)" stroke="none" />
+        <path d={path} fill="none" stroke={C.accent} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="flex justify-between text-[11px] mt-1" style={{ color: C.textSecondary }}>
+        {salesTrend.map((d) => <span key={d.day}>{d.day}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function NavItem({ icon: Icon, label, active, onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative"
+      style={{
+        backgroundColor: active ? "rgba(124,58,237,0.14)" : hover ? "rgba(255,255,255,0.04)" : "transparent",
+        color: active ? C.accent : hover ? C.text : C.textSecondary,
+      }}
+    >
+      {active && (
+        <span
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-full"
+          style={{ backgroundColor: C.accent }}
+        />
+      )}
+      <Icon size={18} strokeWidth={2} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function SectionHeader({ title, subtitle, action }) {
+  return (
+    <div className="flex items-center justify-between mb-5">
+      <div>
+        <h3 className="text-base font-semibold" style={{ color: C.text }}>{title}</h3>
+        {subtitle && <p className="text-sm mt-0.5" style={{ color: C.textSecondary }}>{subtitle}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function Card({ children, className = "", padding = "p-6" }) {
+  return (
+    <div
+      className={`rounded-2xl ${padding} ${className}`}
+      style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* CHARTS                                                                  */
+/* ----------------------------------------------------------------------- */
+
+function CustomTooltip({ active, payload, label, currency }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      className="rounded-xl px-3 py-2 text-xs"
+      style={{ backgroundColor: "#252A3B", border: `1px solid ${C.border}`, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+    >
+      <p style={{ color: C.textSecondary }} className="mb-1">{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: C.text }} className="font-medium">
+          {currency ? `₹${p.value.toLocaleString("en-IN")}` : p.value.toLocaleString("en-IN")}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function SalesTrendChart() {
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <AreaChart data={salesTrend} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+        <defs>
+          <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={C.primary} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={C.primary} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: C.textSecondary, fontSize: 12 }} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fill: C.textSecondary, fontSize: 12 }}
+               tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+        <Tooltip content={<CustomTooltip currency />} />
+        <Area type="monotone" dataKey="revenue" stroke={C.accent} strokeWidth={2.5}
+              fill="url(#revGrad)" dot={{ r: 0 }} activeDot={{ r: 5, fill: C.accent, stroke: C.bg, strokeWidth: 2 }} />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function CategoryDonut() {
+  const [activeIdx, setActiveIdx] = useState(null);
+  return (
+    <div className="flex items-center gap-6">
+      <ResponsiveContainer width="55%" height={220}>
+        <PieChart>
+          <Pie
+            data={categoryData}
+            dataKey="value"
+            nameKey="name"
+            innerRadius={62}
+            outerRadius={88}
+            paddingAngle={3}
+            stroke="none"
+            onMouseEnter={(_, i) => setActiveIdx(i)}
+            onMouseLeave={() => setActiveIdx(null)}
+          >
+            {categoryData.map((entry, i) => (
+              <Cell
+                key={i}
+                fill={entry.color}
+                style={{
+                  filter: activeIdx === i ? "brightness(1.25)" : "brightness(1)",
+                  transition: "filter 0.2s",
+                  cursor: "pointer",
+                }}
+              />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="flex-1 space-y-2.5">
+        {categoryData.map((c, i) => (
+          <div key={i} className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
+              <span style={{ color: activeIdx === i ? C.text : C.textSecondary }}>{c.name}</span>
             </div>
-        """, unsafe_allow_html=True)
+            <span className="font-medium" style={{ color: C.text }}>{c.value}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-        st.markdown(f"👋 Logged in as **{st.session_state.username}**")
+function TopProductsChart() {
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <BarChart data={topProducts} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+        <XAxis type="number" hide />
+        <YAxis
+          type="category"
+          dataKey="name"
+          axisLine={false}
+          tickLine={false}
+          width={140}
+          tick={{ fill: C.textSecondary, fontSize: 12 }}
+        />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+        <Bar dataKey="units" radius={[0, 8, 8, 0]} barSize={16}>
+          {topProducts.map((_, i) => (
+            <Cell key={i} fill={i === 0 ? C.accent : C.primary} fillOpacity={1 - i * 0.13} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
 
-        page = st.radio("Navigate", [
-            "📊 Dashboard", "📦 Inventory", "🧾 Sales",
-            "🔍 Business Insights", "🤖 AI Features", "💬 Chat Assistant",
-        ], label_visibility="collapsed")
+function InventoryHeatmap() {
+  const max = Math.max(...heatmapData.flat());
+  return (
+    <div>
+      <div className="grid mb-2" style={{ gridTemplateColumns: "90px repeat(7, 1fr)", gap: "6px" }}>
+        <div />
+        {heatmapDays.map((d) => (
+          <div key={d} className="text-center text-xs" style={{ color: C.textSecondary }}>{d}</div>
+        ))}
+      </div>
+      {heatmapCategories.map((cat, ri) => (
+        <div key={cat} className="grid mb-1.5" style={{ gridTemplateColumns: "90px repeat(7, 1fr)", gap: "6px" }}>
+          <div className="text-xs flex items-center" style={{ color: C.textSecondary }}>{cat}</div>
+          {heatmapDays.map((_, ci) => {
+            const val = heatmapData[ri][ci];
+            const intensity = val / max;
+            return (
+              <div
+                key={ci}
+                title={`${cat} · ${heatmapDays[ci]}: ${val} units`}
+                className="aspect-square rounded-lg transition-transform duration-150 hover:scale-110 cursor-pointer"
+                style={{
+                  backgroundColor: `rgba(124,58,237,${0.12 + intensity * 0.75})`,
+                  border: `1px solid ${C.border}`,
+                }}
+              />
+            );
+          })}
+        </div>
+      ))}
+      <div className="flex items-center gap-2 mt-4 justify-end">
+        <span className="text-xs" style={{ color: C.textSecondary }}>Less</span>
+        {[0.15, 0.35, 0.55, 0.75, 0.95].map((o, i) => (
+          <span key={i} className="w-3 h-3 rounded" style={{ backgroundColor: `rgba(124,58,237,${o})` }} />
+        ))}
+        <span className="text-xs" style={{ color: C.textSecondary }}>More</span>
+      </div>
+    </div>
+  );
+}
 
-        st.write("")
-        st.toggle("🌙 Dark Mode", key="dark_mode")
+/* ----------------------------------------------------------------------- */
+/* AI ASSISTANT — docked panel, Linear-command-K inspired                  */
+/* ----------------------------------------------------------------------- */
 
-        with st.expander("⚙️ Admin Tools"):
-            st.caption("Resets all data and regenerates 90 days of sample sales.")
-            if st.button("🔄 Reset Sample Data", use_container_width=True):
-                with st.spinner("Regenerating sample data..."):
-                    seed_data.seed_all(verbose=False)
-                st.success("Sample data reset.")
-                st.rerun()
+const assistantSuggestions = [
+  "Which products are running low?",
+  "What should I reorder?",
+  "Which products sell fastest?",
+];
 
-        st.write("")
-        if st.button("🚪 Log out", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            st.rerun()
+const assistantAnswers = {
+  "Which products are running low?":
+    "3 products are below their reorder threshold: Lay's Classic Salted 52g (38 left), Maggi Noodles 4-pack (52 left), and Tata Salt 1kg (out of stock). Want me to draft a reorder list?",
+  "What should I reorder?":
+    "Based on a 7-day demand forecast, I'd prioritize Tata Salt 1kg (out of stock, ~280 units/week demand) and Lay's Classic Salted 52g (~310 units/week). Reordering both today covers roughly 3 weeks of runway.",
+  "Which products sell fastest?":
+    "Amul Toned Milk 500ml leads at 4,280 units this month, followed by Lay's Classic Salted 52g and Tata Salt 1kg. Dairy and Snacks are your two fastest-moving categories.",
+};
 
-        return page
+function AIAssistant() {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState([
+    { role: "assistant", text: "Hi, I'm your inventory copilot. Ask me anything about stock, reorders, or sales." },
+  ]);
+  const [input, setInput] = useState("");
 
+  const send = (text) => {
+    if (!text.trim()) return;
+    setMessages((m) => [...m, { role: "user", text }]);
+    setInput("");
+    setTimeout(() => {
+      const answer = assistantAnswers[text] || "I can help with stock levels, reorder suggestions, and sales velocity — try one of the questions below.";
+      setMessages((m) => [...m, { role: "assistant", text: answer }]);
+    }, 500);
+  };
 
-# ---------------------------------------------------------------------------
-# MAIN
-# ---------------------------------------------------------------------------
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+      {open && (
+        <div
+          className="mb-3 w-80 rounded-2xl overflow-hidden flex flex-col"
+          style={{
+            backgroundColor: "#181B27",
+            border: `1px solid ${C.border}`,
+            boxShadow: "0 24px 60px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(124,58,237,0.1)",
+            maxHeight: "480px",
+            animation: "aiSlideUp 0.25s ease-out",
+          }}
+        >
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center"
+                style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.accent})` }}
+              >
+                <Sparkles size={14} color="white" />
+              </div>
+              <span className="text-sm font-medium" style={{ color: C.text }}>Inventory copilot</span>
+            </div>
+            <button onClick={() => setOpen(false)} className="opacity-60 hover:opacity-100 transition-opacity">
+              <X size={16} style={{ color: C.textSecondary }} />
+            </button>
+          </div>
 
-def main():
-    if not st.session_state.logged_in:
-        render_login()
-        return
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ maxHeight: "280px" }}>
+            {messages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className="rounded-xl px-3 py-2 text-sm leading-relaxed max-w-[85%]"
+                  style={{
+                    backgroundColor: m.role === "user" ? C.primary : "#252A3B",
+                    color: m.role === "user" ? "white" : C.text,
+                  }}
+                >
+                  {m.text}
+                </div>
+              </div>
+            ))}
+          </div>
 
-    page = render_sidebar()
+          <div className="px-4 pb-2 flex flex-wrap gap-1.5">
+            {assistantSuggestions.map((q) => (
+              <button
+                key={q}
+                onClick={() => send(q)}
+                className="text-xs px-2.5 py-1.5 rounded-lg transition-colors"
+                style={{ backgroundColor: "rgba(124,58,237,0.1)", color: C.accent, border: `1px solid rgba(124,58,237,0.2)` }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
 
-    if page == "📊 Dashboard":
-        page_dashboard()
-    elif page == "📦 Inventory":
-        page_inventory()
-    elif page == "🧾 Sales":
-        page_sales()
-    elif page == "🔍 Business Insights":
-        page_analytics()
-    elif page == "🤖 AI Features":
-        page_ai()
-    elif page == "💬 Chat Assistant":
-        page_chat()
+          <div className="px-3 pb-3 pt-1 flex items-center gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send(input)}
+              placeholder="Ask about your inventory..."
+              className="flex-1 bg-transparent text-sm px-3 py-2 rounded-xl outline-none"
+              style={{ backgroundColor: "#0F1117", color: C.text, border: `1px solid ${C.border}` }}
+            />
+            <button
+              onClick={() => send(input)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform hover:scale-105"
+              style={{ backgroundColor: C.primary }}
+            >
+              <Send size={15} color="white" />
+            </button>
+          </div>
+        </div>
+      )}
 
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full transition-all duration-300 hover:scale-105"
+        style={{
+          background: `linear-gradient(135deg, ${C.primary}, ${C.accent})`,
+          boxShadow: "0 12px 32px -8px rgba(124,58,237,0.5)",
+        }}
+      >
+        <Sparkles size={16} color="white" />
+        <span className="text-sm font-medium text-white">{open ? "Close" : "Ask copilot"}</span>
+      </button>
+    </div>
+  );
+}
 
-if __name__ == "__main__":
-    main()
+/* ----------------------------------------------------------------------- */
+/* PAGES                                                                   */
+/* ----------------------------------------------------------------------- */
+
+function DashboardPage() {
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-4">
+        <RevenueHeroCard />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <KpiCard label="Total products" value={12847} trend="4.2%" trendUp accentColor={C.primary} />
+          <KpiCard label="Inventory value" value={8.2} prefix="₹" suffix="M" decimals={1} trend="2.8%" trendUp accentColor={C.accent} />
+          <KpiCard label="Low stock items" value={24} trend="6 new" trendUp={false} accentColor={C.warning} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card className="lg:col-span-2">
+          <SectionHeader
+            title="Sales trend"
+            subtitle="Revenue across the last 7 days"
+            action={
+              <button className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                      style={{ color: C.textSecondary, border: `1px solid ${C.border}` }}>
+                This week <ChevronDown size={13} />
+              </button>
+            }
+          />
+          <SalesTrendChart />
+        </Card>
+
+        <Card>
+          <SectionHeader title="Category distribution" subtitle="Share of total stock" />
+          <CategoryDonut />
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card className="lg:col-span-1">
+          <SectionHeader title="Top selling products" subtitle="By units this month" />
+          <TopProductsChart />
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <SectionHeader title="Inventory heatmap" subtitle="Sales density by category and day" />
+          <InventoryHeatmap />
+        </Card>
+      </div>
+
+      <Card padding="p-0">
+        <div className="p-6 pb-0">
+          <SectionHeader
+            title="Recent transactions"
+            subtitle="Latest sales activity"
+            action={
+              <button className="flex items-center gap-1 text-sm font-medium" style={{ color: C.accent }}>
+                View all <ChevronRight size={14} />
+              </button>
+            }
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+                {["Product", "Category", "Quantity", "Revenue", "Status"].map((h) => (
+                  <th key={h} className="text-left px-6 py-3 font-medium text-xs uppercase tracking-wide"
+                      style={{ color: C.textSecondary }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t, i) => (
+                <tr key={i} className="transition-colors hover:bg-white/[0.02]"
+                    style={{ borderBottom: i < transactions.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                  <td className="px-6 py-4 font-medium" style={{ color: C.text }}>{t.product}</td>
+                  <td className="px-6 py-4" style={{ color: C.textSecondary }}>{t.category}</td>
+                  <td className="px-6 py-4" style={{ color: C.textSecondary }}>{t.qty}</td>
+                  <td className="px-6 py-4 font-medium" style={{ color: C.text }}>₹{t.revenue.toLocaleString("en-IN")}</td>
+                  <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function InventoryPage() {
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold" style={{ color: C.text }}>Inventory</h2>
+          <p className="text-sm mt-0.5" style={{ color: C.textSecondary }}>{inventoryItems.length} products across 5 categories</p>
+        </div>
+        <button
+          className="px-4 py-2.5 rounded-xl text-sm font-medium text-white transition-colors hover:bg-[#6D28D9]"
+          style={{ backgroundColor: C.primary }}
+        >
+          + Add product
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {inventoryItems.map((item, i) => (
+          <InventoryCard key={i} item={item} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InventoryCard({ item }) {
+  const [hover, setHover] = useState(false);
+  const stockPct = Math.min(100, (item.stock / (item.reorder * 2)) * 100);
+  const barColor = item.status === "in-stock" ? C.success : item.status === "low-stock" ? C.warning : C.danger;
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="relative transition-all duration-300"
+      style={{
+        backgroundColor: C.card,
+        border: `1px solid ${hover ? "rgba(124,58,237,0.3)" : C.border}`,
+        borderLeft: `3px solid ${barColor}`,
+        borderTopLeftRadius: "4px",
+        borderBottomLeftRadius: "4px",
+        borderTopRightRadius: "16px",
+        borderBottomRightRadius: "16px",
+        transform: hover ? "translateY(-2px)" : "translateY(0)",
+        boxShadow: hover ? "0 16px 32px -12px rgba(0,0,0,0.4)" : "none",
+        padding: "18px 18px 16px 19px",
+      }}
+    >
+      <div className="flex items-start justify-between mb-3 gap-3">
+        <div className="min-w-0">
+          <h4 className="font-medium text-sm mb-0.5 truncate" style={{ color: C.text }}>{item.name}</h4>
+          <p className="text-xs" style={{ color: C.textSecondary }}>{item.category} · ₹{item.price}</p>
+        </div>
+        <button className="opacity-40 hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+          <MoreHorizontal size={16} style={{ color: C.textSecondary }} />
+        </button>
+      </div>
+
+      <div className="mb-3">
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span style={{ color: C.textSecondary }}>Stock level</span>
+          <span className="font-medium" style={{ color: C.text }}>{item.stock} units</span>
+        </div>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${stockPct}%`, backgroundColor: barColor }}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-3" style={{ borderTop: `1px solid ${C.border}` }}>
+        <span className="text-xs" style={{ color: C.textSecondary }}>{item.supplier}</span>
+        <StatusBadge status={item.status} />
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsPage() {
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      <div>
+        <h2 className="text-lg font-semibold" style={{ color: C.text }}>Analytics</h2>
+        <p className="text-sm mt-0.5" style={{ color: C.textSecondary }}>Revenue, sales, and performance insights</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Card>
+          <SectionHeader title="Revenue trends" subtitle="Last 7 days" />
+          <SalesTrendChart />
+        </Card>
+        <Card>
+          <SectionHeader title="Category comparison" subtitle="Revenue share by category" />
+          <CategoryDonut />
+        </Card>
+      </div>
+
+      <Card>
+        <SectionHeader title="Product performance matrix" subtitle="Units sold vs. revenue contribution" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {topProducts.map((p, i) => (
+            <div key={i} className="rounded-xl p-4" style={{ backgroundColor: "#252A3B" }}>
+              <p className="text-xs mb-2 truncate" style={{ color: C.textSecondary }}>{p.name}</p>
+              <p className="text-xl font-semibold" style={{ color: C.text }}>{p.units.toLocaleString()}</p>
+              <p className="text-xs mt-1" style={{ color: C.success }}>units sold</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* SHELL: sidebar + header                                                  */
+/* ----------------------------------------------------------------------- */
+
+const navItems = [
+  { key: "dashboard", icon: LayoutGrid, label: "Dashboard" },
+  { key: "inventory", icon: Package, label: "Inventory" },
+  { key: "orders", icon: ShoppingCart, label: "Orders" },
+  { key: "suppliers", icon: Truck, label: "Suppliers" },
+  { key: "analytics", icon: BarChart3, label: "Analytics" },
+  { key: "forecasting", icon: TrendingUp, label: "Forecasting" },
+  { key: "settings", icon: Settings, label: "Settings" },
+];
+
+export default function InventoryDashboard() {
+  const [activePage, setActivePage] = useState("dashboard");
+  const [darkMode, setDarkMode] = useState(true);
+
+  return (
+    <div
+      className="min-h-screen w-full flex transition-all duration-300"
+      style={{
+        backgroundColor: C.bg,
+        fontFamily: "Inter, system-ui, sans-serif",
+        filter: darkMode ? "none" : "brightness(1.15) contrast(0.95)",
+      }}
+    >
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes aiSlideUp { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
+        * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 8px; }
+      `}</style>
+
+      {/* SIDEBAR */}
+      <aside
+        className="w-64 flex-shrink-0 flex flex-col px-4 py-5 sticky top-0 h-screen"
+        style={{ backgroundColor: C.sidebar, borderRight: `1px solid ${C.border}` }}
+      >
+        <div className="flex items-center gap-2.5 px-2 mb-8">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ backgroundColor: C.primary }}
+          >
+            <Package size={16} color="white" />
+          </div>
+          <span className="font-semibold text-[15px]" style={{ color: C.text }}>InventoryOS</span>
+        </div>
+
+        <nav className="flex-1 space-y-1">
+          {navItems.map((item) => (
+            <NavItem
+              key={item.key}
+              icon={item.icon}
+              label={item.label}
+              active={activePage === item.key}
+              onClick={() => setActivePage(item.key)}
+            />
+          ))}
+        </nav>
+
+        <div
+          className="flex items-center gap-3 px-2 py-3 rounded-xl mt-2"
+          style={{ backgroundColor: "rgba(255,255,255,0.03)" }}
+        >
+          <div className="relative">
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white"
+              style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.accent})` }}
+            >
+              A
+            </div>
+            <span
+              className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: C.success, border: `2px solid ${C.sidebar}` }}
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate" style={{ color: C.text }}>Ayush Sharma</p>
+            <p className="text-xs truncate" style={{ color: C.textSecondary }}>Store admin</p>
+          </div>
+        </div>
+      </aside>
+
+      {/* MAIN */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* HEADER */}
+        <header
+          className="flex items-center justify-between px-8 py-4 sticky top-0 z-30 backdrop-blur-md"
+          style={{ backgroundColor: "rgba(15,17,23,0.85)", borderBottom: `1px solid ${C.border}` }}
+        >
+          <div className="relative w-full max-w-md">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: C.textSecondary }} />
+            <input
+              placeholder="Search products, orders, suppliers..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm outline-none transition-colors"
+              style={{ backgroundColor: C.card, border: `1px solid ${C.border}`, color: C.text }}
+            />
+          </div>
+
+          <div className="flex items-center gap-3 ml-6">
+            <button
+              className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-white/[0.04]"
+              style={{ border: `1px solid ${C.border}` }}
+            >
+              <Bell size={16} style={{ color: C.textSecondary }} />
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: C.danger }} />
+            </button>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-white/[0.04]"
+              style={{ border: `1px solid ${C.border}` }}
+            >
+              {darkMode ? <Moon size={16} style={{ color: C.textSecondary }} /> : <Sun size={16} style={{ color: C.textSecondary }} />}
+            </button>
+            <button className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl transition-colors hover:bg-white/[0.04]">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
+                style={{ backgroundColor: C.primary }}
+              >
+                A
+              </div>
+              <ChevronDown size={14} style={{ color: C.textSecondary }} />
+            </button>
+          </div>
+        </header>
+
+        {/* CONTENT */}
+        <main className="flex-1 px-8 py-7 overflow-y-auto">
+          {activePage === "dashboard" && (
+            <>
+              <div className="mb-7">
+                <h1 className="text-2xl font-semibold tracking-tight" style={{ color: C.text }}>
+                  Good evening, Ayush <span style={{ filter: "saturate(1.2)" }}>👋</span>
+                </h1>
+                <p className="text-sm mt-1.5" style={{ color: C.textSecondary }}>
+                  Manage your inventory efficiently.
+                </p>
+              </div>
+              <DashboardPage />
+            </>
+          )}
+          {activePage === "inventory" && <InventoryPage />}
+          {activePage === "analytics" && <AnalyticsPage />}
+          {!["dashboard", "inventory", "analytics"].includes(activePage) && (
+            <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
+                style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}
+              >
+                {React.createElement(navItems.find((n) => n.key === activePage)?.icon || ArrowRight, {
+                  size: 18,
+                  style: { color: C.textSecondary },
+                })}
+              </div>
+              <p className="font-medium" style={{ color: C.text }}>
+                {navItems.find((n) => n.key === activePage)?.label} isn't wired up yet
+              </p>
+              <p className="text-sm mt-1 max-w-xs" style={{ color: C.textSecondary }}>
+                Ask for it by name and it'll get the same treatment as Dashboard and Inventory.
+              </p>
+            </div>
+          )}
+        </main>
+      </div>
+
+      <AIAssistant />
+    </div>
+  );
+}
